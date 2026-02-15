@@ -249,4 +249,106 @@ else:
         with st.expander("Show full metrics table"):
             st.dataframe(metrics_df)
 
+# --- Prediction section ---
+st.subheader("3) Run Predictions")
+
+if uploaded is None:
+    st.info("Upload a CSV to run predictions.")
+    st.stop()
+
+try:
+    df = pd.read_csv(uploaded)
+except Exception as e:
+    st.error(f"Could not read CSV: {e}")
+    st.stop()
+
+if df.empty:
+    st.error("Uploaded CSV is empty.")
+    st.stop()
+
+if len(df) > max_rows:
+    st.warning(f"Uploaded {len(df)} rows. Using first {max_rows} rows to keep the app responsive.")
+    df = df.head(int(max_rows))
+
+st.write("Preview of uploaded data:")
+st.dataframe(df.head())
+
+# Check for extra cols info (optional)
+extra_cols = [c for c in df.columns if c not in required_features and c != target_col_guess]
+if extra_cols:
+    st.info(f"Extra columns detected and ignored for prediction: {extra_cols}")
+
+try:
+    X_input = validate_and_prepare_input(df, required_features)
+except ValueError as e:
+    st.error(str(e))
+    st.stop()
+
+try:
+    model = load_model(selected_model_name)
+except Exception as e:
+    st.error(str(e))
+    st.stop()
+
+run = st.button("✅ Run Prediction")
+if not run:
+    st.stop()
+
+y_pred, y_score = get_scores(model, X_input)
+
+out = df.copy()
+out["prediction"] = y_pred
+if y_score is not None:
+    out["probability_positive_class"] = y_score
+
+st.success("Predictions generated!")
+st.dataframe(out.head())
+
+st.download_button(
+    label="⬇️ Download Predictions CSV",
+    data=out.to_csv(index=False).encode("utf-8"),
+    file_name="predictions.csv",
+    mime="text/csv",
+)
+
+# --- Confusion matrix / report ---
+st.subheader("4) Confusion Matrix / Classification Report")
+
+if target_col_guess not in df.columns:
+    st.warning(
+        f"No ground-truth label column named '{target_col_guess}' found in uploaded CSV. "
+        "Upload test data with labels to generate confusion matrix / classification report."
+    )
+else:
+    y_true_raw = df[target_col_guess]
+    y_true = normalize_binary_labels(y_true_raw, positive_label_hint=positive_label_hint)
+
+    if pd.isna(y_true).any():
+        st.error(
+            f"Target column '{target_col_guess}' contains missing/unknown label values. "
+            "Please clean the labels or use the template."
+        )
+        st.stop()
+
+    cm = confusion_matrix(y_true, y_pred)
+    colA, colB = st.columns(2)
+
+    with colA:
+        plot_confusion_matrix(cm, labels=("0", "1"))
+
+    with colB:
+        st.text("Classification Report")
+        st.code(classification_report(y_true, y_pred, digits=4))
+
+    # Optional plots
+    if show_extra_plots:
+        if y_score is None:
+            st.info("ROC/PR plots require probability or decision scores. This model did not provide them.")
+        else:
+            st.subheader("Optional Plots")
+            c1, c2 = st.columns(2)
+            with c1:
+                plot_roc_curve(y_true, y_score)
+            with c2:
+                plot_pr_curve(y_true, y_score)
 
