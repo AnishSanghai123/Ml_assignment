@@ -176,3 +176,38 @@ def normalize_binary_labels(series: pd.Series, positive_label_hint: str = "1") -
     return mapped
 
 
+# -----------------------------
+# UI
+# -----------------------------
+st.title("📌 ML Classification Models - Streamlit App")
+
+required_features = load_feature_columns()
+metrics_df = load_metrics_table()
+
+with st.sidebar:
+    st.header("Controls")
+    selected_model_name = st.selectbox("Select Model", list(MODEL_FILES.keys()))
+
+    st.subheader("CSV / Labels")
+    target_col_guess = st.text_input(
+        "Target column name (for confusion matrix/report)",
+        value="target",
+        help="If your uploaded CSV includes ground-truth labels, enter the column name here.",
+    )
+    positive_label_hint = st.text_input(
+        "Positive label value (only if labels are text)",
+        value="benign",
+        help="Examples: benign / 1 / yes / true. Used only if label mapping is unclear.",
+    )
+
+    max_rows = st.number_input(
+        "Max rows to use (free tier friendly)",
+        min_value=10,
+        max_value=5000,
+        value=1000,
+        step=50,
+    )
+    show_extra_plots = st.checkbox("Show ROC & PR plots (if possible)", value=True)
+
+st.subheader("1) Upload Test Dataset (CSV)")
+
